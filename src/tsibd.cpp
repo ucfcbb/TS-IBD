@@ -1,9 +1,9 @@
 //  * --------------------------------------------------------------------------------------------------------
-//  * Name: tspbwt.cpp
+//  * Name: tsibd.cpp
 //  * Description: A method of Identity by Descent inference from a tree sequence.
 //  * Author: Yuan Wei 
 //  * Created on: Jan 17, 2025
-//  * Modified on: Mar 06, 2025
+//  * Modified on: Dec 19, 2025
 //  * --------------------------------------------------------------------------------------------------------
 
 #include <iostream>
@@ -32,8 +32,8 @@ vector<string> split_string(string line, char delimiter){
 }
 
 //read genetic map from a file
-static map<int, double> read_genetic_map(string input_map_path_and_file_name){
-    map<int, double> genetic_map;
+static map<unsigned long long int, double> read_genetic_map(string input_map_path_and_file_name){
+    map<unsigned long long int, double> genetic_map;
     ifstream input_file_data;
     char map_delimiter = '\t';
     input_file_data.open(input_map_path_and_file_name);
@@ -50,7 +50,7 @@ static map<int, double> read_genetic_map(string input_map_path_and_file_name){
                 //genetic map HapMap format: #Chromosome \t Position(bp) \t Rate(cM/Mb) \t Map(cM)
                 if (line_number > 0){
                     //skip the first header line
-                    int physical_location = stoi(tokens[1]);
+                    unsigned long long int physical_location = stoull(tokens[1]);
                     double genetic_location = stod(tokens[3]);
                     genetic_map[physical_location] = genetic_location;
                 }
@@ -63,9 +63,9 @@ static map<int, double> read_genetic_map(string input_map_path_and_file_name){
 }
 
 //interpolate the genetic position of a physical position
-static double interpolate_genetic_position(map<int, double> & genetic_maps, int physical_position){
+static double interpolate_genetic_position(map<unsigned long long int, double> & genetic_maps, unsigned long long int physical_position){
     //interpolate genetic position based on physical position from the local tree
-    map<int, double>::iterator position_exact_iterator, position_lower_iterator, position_upper_iterator;
+    map<unsigned long long int, double>::iterator position_exact_iterator, position_lower_iterator, position_upper_iterator;
     double genetic_position = 0.0;
     //search current physical position from genetic map
     if (!genetic_maps.empty()){
@@ -90,10 +90,10 @@ static double interpolate_genetic_position(map<int, double> & genetic_maps, int 
                 }
                 else {
                     //estimate genetic position by linear interpolation
-                    int physical_position_next = position_upper_iterator->first;
+                    unsigned long long int physical_position_next = position_upper_iterator->first;
                     double genetic_position_next = position_upper_iterator->second;
                     position_lower_iterator = --position_upper_iterator;
-                    int physical_position_previous = position_lower_iterator->first;
+                    unsigned long long int physical_position_previous = position_lower_iterator->first;
                     double genetic_position_previous = position_lower_iterator->second;
                     genetic_position = genetic_position_next + (double)(physical_position - physical_position_next) * (genetic_position_next - genetic_position_previous) / (double)(physical_position_next - physical_position_previous);
                 }
@@ -186,7 +186,7 @@ void build_prefix_divergence(int site_index, vector<int> & prefix, vector<int> &
 }
 
 //output ibd segments by pbwt for an interval in the middle
-void get_long_matches_not_last_site_with_cutoff(int site_index, vector<int> & prefix, vector<int> & divergence, vector<int> & prefix_prev, vector<int> & divergence_prev, vector<bool> & sites, int unit_of_cutoff, double cutoff_length, vector<int> & physical_positions, map<int, double> & genetic_map, unsigned long long int & number_of_ibds, unsigned long long int & length_of_ibds, ofstream & output_data){
+void get_long_matches_not_last_site_with_cutoff(int site_index, vector<int> & prefix, vector<int> & divergence, vector<int> & prefix_prev, vector<int> & divergence_prev, vector<bool> & sites, int unit_of_cutoff, double cutoff_length, vector<unsigned long long int> & physical_positions, map<unsigned long long int, double> & genetic_map, unsigned long long int & number_of_ibds, unsigned long long int & length_of_ibds, int output_ibds, ofstream & output_data){
     if (cutoff_length > 0){
         vector<int> list_0;
         vector<int> list_1;
@@ -202,11 +202,13 @@ void get_long_matches_not_last_site_with_cutoff(int site_index, vector<int> & pr
                                 dst = divergence_prev[i2];
                             }
                             if (sites[prefix_prev[i1]] != sites[prefix_prev[i2]]){
-                                if (prefix_prev[i1] <= prefix_prev[i2]){
-                                    output_data << prefix_prev[i1] << "\t" << prefix_prev[i2] << "\t" << physical_positions[dst] << "\t" << physical_positions[site_index + 1] << endl;
-                                }
-                                else {
-                                    output_data << prefix_prev[i2] << "\t" << prefix_prev[i1] << "\t" << physical_positions[dst] << "\t" << physical_positions[site_index + 1] << endl;
+                                if (output_ibds > 0){
+                                    if (prefix_prev[i1] <= prefix_prev[i2]){
+                                        output_data << prefix_prev[i1] << "\t" << prefix_prev[i2] << "\t" << physical_positions[dst] << "\t" << physical_positions[site_index + 1] << endl;
+                                    }
+                                    else {
+                                        output_data << prefix_prev[i2] << "\t" << prefix_prev[i1] << "\t" << physical_positions[dst] << "\t" << physical_positions[site_index + 1] << endl;
+                                    }
                                 }
                                 number_of_ibds += 1;
                                 length_of_ibds += physical_positions[site_index + 1] - physical_positions[dst];
@@ -236,11 +238,13 @@ void get_long_matches_not_last_site_with_cutoff(int site_index, vector<int> & pr
                         dst = divergence_prev[i2];
                     }
                     if (sites[prefix_prev[i1]] != sites[prefix_prev[i2]]){
-                        if (prefix_prev[i1] <= prefix_prev[i2]){
-                            output_data << prefix_prev[i1] << "\t" << prefix_prev[i2] << "\t" << physical_positions[dst] << "\t" << physical_positions[site_index + 1] << endl;
-                        }
-                        else {
-                            output_data << prefix_prev[i2] << "\t" << prefix_prev[i1] << "\t" << physical_positions[dst] << "\t" << physical_positions[site_index + 1] << endl;
+                        if (output_ibds > 0){
+                            if (prefix_prev[i1] <= prefix_prev[i2]){
+                                output_data << prefix_prev[i1] << "\t" << prefix_prev[i2] << "\t" << physical_positions[dst] << "\t" << physical_positions[site_index + 1] << endl;
+                            }
+                            else {
+                                output_data << prefix_prev[i2] << "\t" << prefix_prev[i1] << "\t" << physical_positions[dst] << "\t" << physical_positions[site_index + 1] << endl;
+                            }
                         }
                         number_of_ibds += 1;
                         length_of_ibds += physical_positions[site_index + 1] - physical_positions[dst];
@@ -255,7 +259,7 @@ void get_long_matches_not_last_site_with_cutoff(int site_index, vector<int> & pr
 }
 
 //output ibd segments by pbwt for an interval at the end
-void get_long_matches_last_site_with_cutoff(int site_index, vector<int> & prefix, vector<int> & divergence, int unit_of_cutoff, double cutoff_length, vector<int> & physical_positions, map<int, double> & genetic_map, unsigned long long int & number_of_ibds, unsigned long long int & length_of_ibds, ofstream & output_data){
+void get_long_matches_last_site_with_cutoff(int site_index, vector<int> & prefix, vector<int> & divergence, int unit_of_cutoff, double cutoff_length, vector<unsigned long long int> & physical_positions, map<unsigned long long int, double> & genetic_map, unsigned long long int & number_of_ibds, unsigned long long int & length_of_ibds, int output_ibds, ofstream & output_data){
     if (cutoff_length > 0){
         vector<int> list_t;
         for (unsigned long int i = 0; i < divergence.size(); i++){
@@ -267,11 +271,13 @@ void get_long_matches_last_site_with_cutoff(int site_index, vector<int> & prefix
                             if (divergence[list_t[i2]] > dst){
                                 dst = divergence[list_t[i2]];
                             }
-                            if (prefix[list_t[i1]] <= prefix[list_t[i2]]){
-                                output_data << prefix[list_t[i1]] << "\t" << prefix[list_t[i2]] << "\t" << physical_positions[dst] << "\t" << physical_positions[site_index + 1] << endl;
-                            }
-                            else {
-                                output_data << prefix[list_t[i2]] << "\t" << prefix[list_t[i1]] << "\t" << physical_positions[dst] << "\t" << physical_positions[site_index + 1] << endl;
+                            if (output_ibds > 0){
+                                if (prefix[list_t[i1]] <= prefix[list_t[i2]]){
+                                    output_data << prefix[list_t[i1]] << "\t" << prefix[list_t[i2]] << "\t" << physical_positions[dst] << "\t" << physical_positions[site_index + 1] << endl;
+                                }
+                                else {
+                                    output_data << prefix[list_t[i2]] << "\t" << prefix[list_t[i1]] << "\t" << physical_positions[dst] << "\t" << physical_positions[site_index + 1] << endl;
+                                }
                             }
                             number_of_ibds += 1;
                             length_of_ibds += physical_positions[site_index + 1] - physical_positions[dst];
@@ -291,11 +297,13 @@ void get_long_matches_last_site_with_cutoff(int site_index, vector<int> & prefix
                     if (divergence[list_t[i2]] > dst){
                         dst = divergence[list_t[i2]];
                     }
-                    if (prefix[list_t[i1]] <= prefix[list_t[i2]]){
-                        output_data << prefix[list_t[i1]] << "\t" << prefix[list_t[i2]] << "\t" << physical_positions[dst] << "\t" << physical_positions[site_index + 1] << endl;
-                    }
-                    else {
-                        output_data << prefix[list_t[i2]] << "\t" << prefix[list_t[i1]] << "\t" << physical_positions[dst] << "\t" << physical_positions[site_index + 1] << endl;
+                    if (output_ibds > 0){
+                        if (prefix[list_t[i1]] <= prefix[list_t[i2]]){
+                            output_data << prefix[list_t[i1]] << "\t" << prefix[list_t[i2]] << "\t" << physical_positions[dst] << "\t" << physical_positions[site_index + 1] << endl;
+                        }
+                        else {
+                            output_data << prefix[list_t[i2]] << "\t" << prefix[list_t[i1]] << "\t" << physical_positions[dst] << "\t" << physical_positions[site_index + 1] << endl;
+                        }
                     }
                     number_of_ibds += 1;
                     length_of_ibds += physical_positions[site_index + 1] - physical_positions[dst];
@@ -310,12 +318,13 @@ void get_long_matches_last_site_with_cutoff(int site_index, vector<int> & prefix
 static void show_usage(string program_name){
     cout << "Usage: " << program_name << " <Option(s)>\n";
     cout << "Option(s):\n";
-    cout << "\t-h,--help\t\t\t\t\tShow this help message\n";
-    cout << "\t-t,--trees <INPUT TREE SEQUENCE FILE>\t\tInput tree sequence path and file name\n";
-    cout << "\t-m,--map <INPUT GENETIC MAP FILE>\t\tInput genetic map path and file name\n";
-    cout << "\t-l,--length <MINIMUM CUTOFF LENGTH>\t\tMinimum cutoff length of an IBD (default is 1 base pair)\n";
-    cout << "\t-u,--unit <UNIT OF CUTOFF LENGTH>\t\tUnit of cutoff length of an IBD (0: physical; 1: genetic (input genetic map is required); default is 0)\n";
-    cout << "\t-o,--output <OUTPUT IBD FILE>\t\t\tOutput ibd path and file name (default is \"./output.ibd\")\n";
+    cout << "\t-h,--help\t\t\t\tShow this help message\n";
+    cout << "\t-t,--trees <INPUT TREE SEQUENCE FILE>\tInput tree sequence path and file name\n";
+    cout << "\t-m,--map <INPUT GENETIC MAP FILE>\tInput genetic map path and file name\n";
+    cout << "\t-l,--length <MINIMUM CUTOFF LENGTH>\tMinimum cutoff length of an IBD (default is 1 base pair)\n";
+    cout << "\t-u,--unit <UNIT OF CUTOFF LENGTH>\tUnit of cutoff length of an IBD (0: physical; 1: genetic (input genetic map is required); default is 0)\n";
+    cout << "\t-i,--outputibds <IDENTIFIER>\t\tSpecify whether output IBD segments (0: do not output IBDs; 1: output IBDs; default is 1)\n";
+    cout << "\t-o,--output <OUTPUT IBD FILE>\t\tOutput IBD path and file name (default is \"./output.ibd\")\n";
 }
 
 int main(int argc, char *argv[]){
@@ -326,8 +335,9 @@ int main(int argc, char *argv[]){
         string input_ts_file;
         string input_map_file;
         string output_ibd_file = "./output.ibd";
-        double min_cutoff_length = 1; //default is 1 base pair
+        double min_cutoff_length = 1; //default is 1 base pair (physical) or 0.001 centiMorgan (genetic)
         int unit_of_cutoff_length = 0; //0: physical; 1: genetic (input genetic map is required); default is 0
+        int output_ibds = 1; //0: do not output ibds; 1: output ibds; default is 1
 
         //get command line arguments
         string program_name = argv[0];
@@ -399,6 +409,18 @@ int main(int argc, char *argv[]){
                     return 1;
                 }
             }
+            else if ((argument == "-i") || (argument == "--outputibds")){
+                if (i + 1 < argc){
+                    output_ibds = stoi(argv[i + 1]);
+                    program_arguments += " i=" + to_string(output_ibds);
+                    i++;
+                }
+                else {
+                    cout << "-i (or --outputibds) option requires one argument\n";
+                    cout << "end program" << endl;
+                    return 1;
+                }
+            }
             else {
                 cout << "unrecognized arguments: " << argument << endl;
                 show_usage(argv[0]);
@@ -417,22 +439,29 @@ int main(int argc, char *argv[]){
         }
 
         if (min_cutoff_length <= 0){
-            min_cutoff_length = 1;
+            if (unit_of_cutoff_length > 0){
+                min_cutoff_length = 0.001;
+            }
+            else {
+                min_cutoff_length = 1;
+            }
             cout << "min_cutoff_length is set to: " << min_cutoff_length << endl;
         }
 
         ofstream output_file_data;
-        output_file_data.open(output_ibd_file, ios::trunc);
-        if (!output_file_data){
-            cout << "cannot create or open file " + output_ibd_file << endl;
-            exit(1);
-        }
-        if (output_file_data.is_open()){
-            output_file_data << "#sample_id_1\tsample_id_2\tstart_position\tend_position" << endl;
+        if (output_ibds > 0){
+            output_file_data.open(output_ibd_file, ios::trunc);
+            if (!output_file_data){
+                cout << "cannot create or open file " + output_ibd_file << endl;
+                exit(1);
+            }
+            if (output_file_data.is_open()){
+                output_file_data << "#sample_id_1\tsample_id_2\tstart_position\tend_position" << endl;
+            }
         }
         
         //load genetic map
-        map<int, double> genetic_map;
+        map<unsigned long long int, double> genetic_map;
         if (unit_of_cutoff_length == 1){
             genetic_map = read_genetic_map(input_map_file);
         }
@@ -459,15 +488,15 @@ int main(int argc, char *argv[]){
             sorted_edges.emplace_back((&tables)->edges.right[e], (&tables)->edges.child[e]);
         }
         sort(begin(sorted_edges), end(sorted_edges), compare_edges);
-        
+
         //initialize variables
         int num_trees = (int)(ts.num_trees);
         int number_of_samples = (int)(ts.num_samples);
         unsigned long int curr_edge_id = 0;
         double start_pos_curr_tree = -1;
         double end_pos_curr_tree = -1;
-        map<int, double> ts_genetic_map;
-        vector<int> ts_physical_positions;
+        map<unsigned long long int, double> ts_genetic_map;
+        vector<unsigned long long int> ts_physical_positions;
         unsigned long long int total_number_of_ibds = 0;
         unsigned long long int total_physical_length_of_ibds = 0;
         vector<int> prefix1, prefix2;
@@ -483,7 +512,7 @@ int main(int argc, char *argv[]){
             int tree_id = (int)(tree.index);
             start_pos_curr_tree = tree.interval.left;
             end_pos_curr_tree = tree.interval.right;
-            
+
             //update ts physical map
             if (ts_physical_positions.size() == 0 || (ts_physical_positions.size() > 0 && ts_physical_positions[ts_physical_positions.size() - 1] != start_pos_curr_tree)){
                 ts_physical_positions.emplace_back(start_pos_curr_tree);
@@ -507,7 +536,7 @@ int main(int argc, char *argv[]){
                 if (tree.num_edges == 0){
                     //skip the tree
                     if ((*prefix_ptr).size() > 0){
-                        get_long_matches_last_site_with_cutoff(tree_id, *prefix_ptr, *divergence_ptr, unit_of_cutoff_length, min_cutoff_length, ts_physical_positions, ts_genetic_map, total_number_of_ibds, total_physical_length_of_ibds, output_file_data);
+                        get_long_matches_last_site_with_cutoff(tree_id, *prefix_ptr, *divergence_ptr, unit_of_cutoff_length, min_cutoff_length, ts_physical_positions, ts_genetic_map, total_number_of_ibds, total_physical_length_of_ibds, output_ibds, output_file_data);
                     }
                     for (int i = 0; i < number_of_samples; i++){
                         (*prefix_ptr).emplace_back(i);
@@ -543,20 +572,22 @@ int main(int argc, char *argv[]){
                         (*prefix_ptr).clear();
                         (*divergence_ptr).clear();
                         build_prefix_divergence(tree_id, *prefix_ptr, *divergence_ptr, *prefix_prev_ptr, *divergence_prev_ptr, changed_leaf_nodes);
-                        get_long_matches_not_last_site_with_cutoff(tree_id, *prefix_ptr, *divergence_ptr, *prefix_prev_ptr, *divergence_prev_ptr, changed_leaf_nodes, unit_of_cutoff_length, min_cutoff_length, ts_physical_positions, ts_genetic_map, total_number_of_ibds, total_physical_length_of_ibds, output_file_data);
-                        curr_edge_id += 1;
+                        get_long_matches_not_last_site_with_cutoff(tree_id, *prefix_ptr, *divergence_ptr, *prefix_prev_ptr, *divergence_prev_ptr, changed_leaf_nodes, unit_of_cutoff_length, min_cutoff_length, ts_physical_positions, ts_genetic_map, total_number_of_ibds, total_physical_length_of_ibds, output_ibds, output_file_data);
                         changed_leaf_nodes.clear();
+                        curr_edge_id += 1;
                     }
                 }
             }
             if (tree_id == num_trees - 1){
-                get_long_matches_last_site_with_cutoff(tree_id, *prefix_ptr, *divergence_ptr, unit_of_cutoff_length, min_cutoff_length, ts_physical_positions, ts_genetic_map, total_number_of_ibds, total_physical_length_of_ibds, output_file_data);
+                get_long_matches_last_site_with_cutoff(tree_id, *prefix_ptr, *divergence_ptr, unit_of_cutoff_length, min_cutoff_length, ts_physical_positions, ts_genetic_map, total_number_of_ibds, total_physical_length_of_ibds, output_ibds, output_file_data);
             }
         }
         check_tsk_error(ret);
 
         //clean up
-        output_file_data.close();
+        if (output_ibds > 0){
+            output_file_data.close();
+        }
         sorted_edges.clear();
         (*prefix_ptr).clear();
         (*divergence_ptr).clear();
